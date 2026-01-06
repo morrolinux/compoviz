@@ -1,174 +1,261 @@
 import { normalizeDependsOn, normalizeArray } from './validation';
 
 /**
- * Generates a Mermaid flowchart graph from the compose state.
+ * Extract depends_on condition from long syntax
+ */
+const getDependsOnCondition = (dependsOn, depName) => {
+    if (!dependsOn) return '';
+    if (Array.isArray(dependsOn)) return '';
+    if (typeof dependsOn === 'object' && dependsOn[depName]) {
+        return dependsOn[depName].condition || '';
+    }
+    return '';
+};
+
+/**
+ * Escape special characters for Mermaid labels
+ */
+const escapeLabel = (str) => {
+    if (!str) return '';
+    return String(str).replace(/"/g, "'").replace(/\n/g, ' ');
+};
+
+/**
+ * Generates an enhanced Mermaid flowchart from the compose state.
+ * Features:
+ * - Docker Host outer boundary
+ * - Services grouped by network
+ * - Host path mounts as external nodes
+ * - Port badges on services
+ * - Healthcheck, env_file, labels indicators
+ * - depends_on with condition labels
  * @param {object} state - The compose state.
  * @returns {string} The Mermaid graph definition.
  */
 export const generateMermaidGraph = (state) => {
-    const serviceCount = Object.keys(state.services || {}).length;
-    const networkCount = Object.keys(state.networks || {}).length;
-    const volumeCount = Object.keys(state.volumes || {}).length;
+    const services = state.services || {};
+    const networks = state.networks || {};
+    const volumes = state.volumes || {};
+    const secrets = state.secrets || {};
+    const configs = state.configs || {};
 
-    // Choose layout direction based on complexity
-    const direction = serviceCount > 6 ? 'LR' : 'TB';
+    const serviceCount = Object.keys(services).length;
+    if (serviceCount === 0) {
+        return 'flowchart TB\n  empty["No services defined - add a service to visualize"]:::empty\n  classDef empty fill:#1e293b,stroke:#475569,color:#94a3b8';
+    }
 
-    let graph = `flowchart ${direction}\n`;
+    let graph = `flowchart TB\n`;
 
-    // Enhanced class definitions with gradients and glow effects
-    graph += `  %% Service nodes - Blue gradient with glow\n`;
-    graph += `  classDef service fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff,rx:12,ry:12\n`;
-    graph += `  classDef serviceHover fill:#1d4ed8,stroke:#60a5fa,stroke-width:3px,color:#fff\n`;
-
-    graph += `  %% Network nodes - Emerald with circuit pattern\n`;
-    graph += `  classDef network fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff\n`;
-
-    graph += `  %% Volume nodes - Amber/Orange storage\n`;
-    graph += `  classDef volume fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fff\n`;
-
-    graph += `  %% Secret nodes - Purple secure\n`;
-    graph += `  classDef secret fill:#581c87,stroke:#a855f7,stroke-width:2px,color:#fff\n`;
-
-    graph += `  %% Config nodes - Cyan config\n`;
-    graph += `  classDef config fill:#164e63,stroke:#06b6d4,stroke-width:2px,color:#fff\n`;
-
-    graph += `  %% Edge styles\n`;
-    graph += `  linkStyle default stroke:#64748b,stroke-width:2px\n`;
-
+    // Class definitions
+    graph += `  %% Node styles\n`;
+    graph += `  classDef service fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff,rx:8\n`;
+    graph += `  classDef serviceHealthy fill:#166534,stroke:#22c55e,stroke-width:2px,color:#fff,rx:8\n`;
+    graph += `  classDef network fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#fff\n`;
+    graph += `  classDef volume fill:#92400e,stroke:#f59e0b,stroke-width:2px,color:#fff\n`;
+    graph += `  classDef hostPath fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fff,stroke-dasharray:3\n`;
+    graph += `  classDef secret fill:#6b21a8,stroke:#a855f7,stroke-width:2px,color:#fff\n`;
+    graph += `  classDef config fill:#0e7490,stroke:#06b6d4,stroke-width:2px,color:#fff\n`;
+    graph += `  classDef port fill:#dc2626,stroke:#fca5a5,stroke-width:1px,color:#fff,rx:4\n`;
+    graph += `  classDef external fill:#1f2937,stroke:#6b7280,stroke-width:2px,color:#9ca3af,stroke-dasharray:5\n`;
     graph += `\n`;
 
-    // Generate service nodes with rich HTML content
-    if (serviceCount > 0) {
-        graph += `  subgraph services [" 🐳 SERVICES "]\n`;
-        graph += `    direction ${direction}\n`;
-        Object.entries(state.services || {}).forEach(([name, svc]) => {
-            const img = svc.image ? `📦 ${svc.image}` : '⚠️ no image';
-            const portsArr = normalizeArray(svc.ports);
-            const ports = portsArr.length > 0
-                ? `🔌 ${portsArr.slice(0, 2).join(', ')}${portsArr.length > 2 ? '...' : ''}`
-                : '';
-            const hasHealth = svc.healthcheck?.test ? '💚' : '';
-            const hasResources = svc.deploy?.resources?.limits?.memory ? '📊' : '';
-
-            // Build rich label
-            let label = `<div style='padding:8px;text-align:center;'>`;
-            label += `<div style='font-size:16px;font-weight:700;margin-bottom:4px;'>${hasHealth}${hasResources} ${name}</div>`;
-            label += `<div style='font-size:11px;opacity:0.85;'>${img}</div>`;
-            if (ports) label += `<div style='font-size:10px;opacity:0.7;margin-top:2px;'>${ports}</div>`;
-            label += `</div>`;
-
-            graph += `    ${name}["${label}"]:::service\n`;
-        });
-        graph += `  end\n\n`;
-    }
-
-    // Generate network nodes
-    if (networkCount > 0) {
-        graph += `  subgraph networks [" 🌐 NETWORKS "]\n`;
-        graph += `    direction ${direction}\n`;
-        Object.entries(state.networks || {}).forEach(([name, net]) => {
-            const driver = net.driver || 'bridge';
-            const external = net.external ? '🔗' : '';
-            graph += `    net_${name}(("${external}${name}<br/><small>${driver}</small>")):::network\n`;
-        });
-        graph += `  end\n\n`;
-    }
-
-    // Generate volume nodes
-    if (volumeCount > 0) {
-        graph += `  subgraph volumes [" 💾 VOLUMES "]\n`;
-        graph += `    direction ${direction}\n`;
-        Object.entries(state.volumes || {}).forEach(([name, vol]) => {
-            // vol can be null in compose files (empty volume definition)
-            const driver = vol?.driver || 'local';
-            const external = vol?.external ? '🔗' : '';
-            graph += `    vol_${name}[("${external}${name}<br/><small>${driver}</small>")]:::volume\n`;
-        });
-        graph += `  end\n\n`;
-    }
-
-    // Generate secrets nodes
-    const secretCount = Object.keys(state.secrets || {}).length;
-    if (secretCount > 0) {
-        graph += `  subgraph secrets [" 🔐 SECRETS "]\n`;
-        Object.keys(state.secrets || {}).forEach(name => {
-            graph += `    sec_${name}{{"🔑 ${name}"}}:::secret\n`;
-        });
-        graph += `  end\n\n`;
-    }
-
-    // Generate configs nodes
-    const configCount = Object.keys(state.configs || {}).length;
-    if (configCount > 0) {
-        graph += `  subgraph configs [" ⚙️ CONFIGS "]\n`;
-        Object.keys(state.configs || {}).forEach(name => {
-            graph += `    cfg_${name}[/"📄 ${name}"/]:::config\n`;
-        });
-        graph += `  end\n\n`;
-    }
-
-    // Generate relationships with styled edges
-    let edgeIndex = 0;
-    const dependsOnEdges = [];
-    const networkEdges = [];
-    const volumeEdges = [];
-    const secretEdges = [];
-    const configEdges = [];
-
-    Object.entries(state.services || {}).forEach(([name, svc]) => {
-        // Dependency edges (thick pink arrow)
-        normalizeDependsOn(svc.depends_on).forEach(dep => {
-            if (state.services && state.services[dep]) {
-                graph += `  ${dep} ==> ${name}\n`;
-                dependsOnEdges.push(edgeIndex++);
-            }
-        });
-
-        // Network connections (cyan dashed)
-        normalizeArray(svc.networks).forEach(net => {
-            if (state.networks && state.networks[net]) {
-                graph += `  ${name} --- net_${net}\n`;
-                networkEdges.push(edgeIndex++);
-            }
-        });
-
-        // Volume mounts (amber dotted)
+    // Collect host paths (bind mounts) for external visualization
+    const hostPaths = new Map(); // path -> [serviceName]
+    Object.entries(services).forEach(([name, svc]) => {
         normalizeArray(svc.volumes).forEach(vol => {
-            const volName = typeof vol === 'string' ? vol.split(':')[0] : '';
-            if (volName && state.volumes && state.volumes[volName]) {
-                graph += `  vol_${volName} -.-> ${name}\n`;
-                volumeEdges.push(edgeIndex++);
-            }
-        });
-
-        // Secrets connections (purple dotted)
-        normalizeArray(svc.secrets).forEach(sec => {
-            const secName = typeof sec === 'string' ? sec : sec?.source;
-            if (secName && state.secrets && state.secrets[secName]) {
-                graph += `  sec_${secName} -.-> ${name}\n`;
-                secretEdges.push(edgeIndex++);
-            }
-        });
-
-        // Configs connections (cyan dotted)
-        normalizeArray(svc.configs).forEach(cfg => {
-            const cfgName = typeof cfg === 'string' ? cfg : cfg?.source;
-            if (cfgName && state.configs && state.configs[cfgName]) {
-                graph += `  cfg_${cfgName} -.-> ${name}\n`;
-                configEdges.push(edgeIndex++);
+            const src = typeof vol === 'string' ? vol.split(':')[0] : '';
+            if (src && (src.startsWith('.') || src.startsWith('/'))) {
+                const shortPath = src.length > 20 ? '...' + src.slice(-17) : src;
+                if (!hostPaths.has(shortPath)) hostPaths.set(shortPath, { full: src, services: [] });
+                hostPaths.get(shortPath).services.push(name);
             }
         });
     });
 
-    // Apply edge styles
-    if (dependsOnEdges.length > 0) {
-        graph += `  linkStyle ${dependsOnEdges.join(',')} stroke:#f472b6,stroke-width:3px\n`;
+    // Docker Host container
+    graph += `  subgraph dockerHost [" 🖥️ DOCKER HOST "]\n`;
+    graph += `    direction TB\n`;
+
+    // Networks as containers for services
+    const networkNames = Object.keys(networks);
+    const servicesByNetwork = new Map();
+
+    // Group services by their primary network
+    Object.entries(services).forEach(([name, svc]) => {
+        const svcNetworks = normalizeArray(svc.networks);
+        const primaryNet = svcNetworks[0] || '_default';
+        if (!servicesByNetwork.has(primaryNet)) servicesByNetwork.set(primaryNet, []);
+        servicesByNetwork.get(primaryNet).push({ name, svc });
+    });
+
+    // Render network subgraphs with their services
+    for (const [netName, netServices] of servicesByNetwork) {
+        const netConfig = networks[netName];
+        const driver = netConfig?.driver || 'bridge';
+        const isExternal = netConfig?.external;
+
+        graph += `    subgraph net_${netName} [" 🌐 ${netName} (${driver})${isExternal ? ' 🔗' : ''} "]\n`;
+        graph += `      direction LR\n`;
+
+        for (const { name, svc } of netServices) {
+            // Build service node content
+            const img = svc.image || (svc.build ? 'Build: ' + (svc.build.dockerfile || 'Dockerfile') : '⚠️ no image');
+            const imgShort = img.length > 25 ? img.slice(0, 22) + '...' : img;
+
+            // Indicators
+            const hasHealth = svc.healthcheck?.test ? '💚' : '';
+            const hasEnvFile = normalizeArray(svc.env_file).length > 0 ? '📄' : '';
+            const hasLabels = svc.labels && Object.keys(svc.labels).length > 0 ? '🏷️' : '';
+            const indicators = [hasHealth, hasEnvFile, hasLabels].filter(Boolean).join('');
+
+            // Port badges
+            const portsArr = normalizeArray(svc.ports);
+
+            // Service class
+            const svcClass = svc.healthcheck?.test ? 'serviceHealthy' : 'service';
+
+            // Main service node
+            let label = `<b>${escapeLabel(name)}</b>`;
+            if (svc.container_name && svc.container_name !== name) {
+                label += `<br/><small>(${escapeLabel(svc.container_name)})</small>`;
+            }
+            label += `<br/><small>${escapeLabel(imgShort)}</small>`;
+            if (indicators) label += `<br/>${indicators}`;
+
+            graph += `      ${name}["${label}"]:::${svcClass}\n`;
+
+            // Port nodes connected to service
+            portsArr.forEach((port, idx) => {
+                const portStr = typeof port === 'string' ? port : `${port.published}:${port.target}`;
+                const hostPort = portStr.split(':')[0];
+                graph += `      port_${name}_${idx}(["${hostPort}"]):::port\n`;
+                graph += `      port_${name}_${idx} --> ${name}\n`;
+            });
+        }
+
+        graph += `    end\n\n`;
     }
-    if (networkEdges.length > 0) {
-        graph += `  linkStyle ${networkEdges.join(',')} stroke:#22d3ee,stroke-width:2px,stroke-dasharray:5\n`;
+
+    // Named Volumes subgraph
+    const volumeNames = Object.keys(volumes);
+    if (volumeNames.length > 0) {
+        graph += `    subgraph vol_group [" 💾 VOLUMES "]\n`;
+        graph += `      direction TB\n`;
+        volumeNames.forEach(vName => {
+            const vol = volumes[vName];
+            const driver = vol?.driver || 'local';
+            graph += `      vol_${vName}[("${vName}<br/><small>${driver}</small>")]:::volume\n`;
+        });
+        graph += `    end\n\n`;
+    }
+
+    // Secrets subgraph
+    const secretNames = Object.keys(secrets);
+    if (secretNames.length > 0) {
+        graph += `    subgraph sec_group [" 🔐 SECRETS "]\n`;
+        secretNames.forEach(sName => {
+            graph += `      sec_${sName}{{"🔑 ${sName}"}}:::secret\n`;
+        });
+        graph += `    end\n\n`;
+    }
+
+    // Configs subgraph
+    const configNames = Object.keys(configs);
+    if (configNames.length > 0) {
+        graph += `    subgraph cfg_group [" ⚙️ CONFIGS "]\n`;
+        configNames.forEach(cName => {
+            graph += `      cfg_${cName}[/"📄 ${cName}"/]:::config\n`;
+        });
+        graph += `    end\n\n`;
+    }
+
+    graph += `  end\n\n`; // End Docker Host
+
+    // Host Paths (outside Docker Host)
+    if (hostPaths.size > 0) {
+        graph += `  subgraph hostPaths [" 📁 HOST PATHS "]\n`;
+        graph += `    direction TB\n`;
+        let pathIdx = 0;
+        hostPaths.forEach((data, shortPath) => {
+            graph += `    hp_${pathIdx}["${shortPath}"]:::hostPath\n`;
+            pathIdx++;
+        });
+        graph += `  end\n\n`;
+    }
+
+    // Relationships
+    let edgeIdx = 0;
+    const dependsEdges = [];
+    const volumeEdges = [];
+    const secretEdges = [];
+    const configEdges = [];
+    const hostPathEdges = [];
+
+    Object.entries(services).forEach(([name, svc]) => {
+        // depends_on with condition labels
+        const dependsOn = svc.depends_on;
+        normalizeDependsOn(dependsOn).forEach(dep => {
+            if (services[dep]) {
+                const condition = getDependsOnCondition(dependsOn, dep);
+                const condLabel = condition ? condition.replace('service_', '') : 'started';
+                graph += `  ${dep} -->|"${condLabel}"| ${name}\n`;
+                dependsEdges.push(edgeIdx++);
+            }
+        });
+
+        // Volume connections
+        normalizeArray(svc.volumes).forEach(vol => {
+            const src = typeof vol === 'string' ? vol.split(':')[0] : '';
+            const target = typeof vol === 'string' ? vol.split(':')[1] : '';
+
+            // Named volume
+            if (src && volumes[src]) {
+                const targetShort = target && target.length > 15 ? '...' + target.slice(-12) : target;
+                graph += `  vol_${src} -.->|"${targetShort}"| ${name}\n`;
+                volumeEdges.push(edgeIdx++);
+            }
+            // Host path
+            else if (src && (src.startsWith('.') || src.startsWith('/'))) {
+                const shortPath = src.length > 20 ? '...' + src.slice(-17) : src;
+                let pathIdx = 0;
+                hostPaths.forEach((data, sp) => {
+                    if (sp === shortPath && data.services.includes(name)) {
+                        graph += `  hp_${pathIdx} -.-> ${name}\n`;
+                        hostPathEdges.push(edgeIdx++);
+                    }
+                    pathIdx++;
+                });
+            }
+        });
+
+        // Secrets
+        normalizeArray(svc.secrets).forEach(sec => {
+            const secName = typeof sec === 'string' ? sec : sec?.source;
+            if (secName && secrets[secName]) {
+                graph += `  sec_${secName} -.-> ${name}\n`;
+                secretEdges.push(edgeIdx++);
+            }
+        });
+
+        // Configs
+        normalizeArray(svc.configs).forEach(cfg => {
+            const cfgName = typeof cfg === 'string' ? cfg : cfg?.source;
+            if (cfgName && configs[cfgName]) {
+                graph += `  cfg_${cfgName} -.-> ${name}\n`;
+                configEdges.push(edgeIdx++);
+            }
+        });
+    });
+
+    // Edge styles
+    if (dependsEdges.length > 0) {
+        graph += `  linkStyle ${dependsEdges.join(',')} stroke:#f472b6,stroke-width:2px\n`;
     }
     if (volumeEdges.length > 0) {
         graph += `  linkStyle ${volumeEdges.join(',')} stroke:#fbbf24,stroke-width:2px,stroke-dasharray:3\n`;
+    }
+    if (hostPathEdges.length > 0) {
+        graph += `  linkStyle ${hostPathEdges.join(',')} stroke:#d97706,stroke-width:2px,stroke-dasharray:5\n`;
     }
     if (secretEdges.length > 0) {
         graph += `  linkStyle ${secretEdges.join(',')} stroke:#a855f7,stroke-width:2px,stroke-dasharray:3\n`;
