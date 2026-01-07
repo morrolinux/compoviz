@@ -1050,7 +1050,13 @@ export default function App() {
         <header className="glass flex items-center justify-between px-4 py-3 border-b border-cyber-border/50">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-cyber-surface-light rounded-lg lg:hidden"><Menu size={20} /></button>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-cyber-accent to-cyber-purple bg-clip-text text-transparent">Docker Compose Architect</h1>
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="Compoviz Logo" className="w-8 h-8 rounded-lg object-cover" />
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-cyber-accent to-cyber-purple bg-clip-text text-transparent">Compoviz</h1>
+                <p className="text-[8px] uppercase tracking-[0.2em] text-cyber-accent font-semibold leading-none">Visual Architect</p>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Undo/Redo buttons */}
