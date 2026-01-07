@@ -11,6 +11,8 @@ export const cleanObject = (obj) => {
     if (typeof obj !== 'object') return obj === '' ? undefined : obj;
     const cleaned = {};
     for (const [k, v] of Object.entries(obj)) {
+        // Skip internal properties (prefixed with _) like _position
+        if (k.startsWith('_')) continue;
         const val = cleanObject(v);
         if (val !== undefined && !(typeof val === 'object' && val !== null && Object.keys(val).length === 0)) cleaned[k] = val;
     }
