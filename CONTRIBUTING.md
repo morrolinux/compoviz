@@ -29,6 +29,21 @@ Thanks for your interest in contributing to Compoviz! 🎉
 
 5. Open your browser and navigate to `http://localhost:5173`
 
+### Testing
+
+Run the test suite locally to ensure everything is working:
+
+```bash
+# Run all tests once
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Open Vitest UI for a better experience
+npm run test:ui
+```
+
 ## How to Contribute
 
 ### Reporting Bugs
