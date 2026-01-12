@@ -173,12 +173,21 @@ function CompareView() {
 
     const conflicts = comparisonResults.filter(r => r.type === 'error');
     const summary = getComparisonSummary(comparisonResults);
+    const summaryText = useMemo(() => {
+        const parts = [];
+        if (summary.errors) parts.push(`${summary.errors} error${summary.errors === 1 ? '' : 's'}`);
+        if (summary.warnings) parts.push(`${summary.warnings} warning${summary.warnings === 1 ? '' : 's'}`);
+        if (summary.info) parts.push(`${summary.info} info item${summary.info === 1 ? '' : 's'}`);
+        if (parts.length === 0) {
+            return 'No conflicts or overlaps detected across projects.';
+        }
+        return `${parts.join(', ')} found across projects.`;
+    }, [summary]);
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
-            {/* Project Management Header */}
-            <div className="p-4 bg-cyber-surface border-b border-cyber-border/50 shadow-lg z-10">
-                <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 pb-4 bg-cyber-surface border-b border-cyber-border/50 shadow-lg z-10">
+                <div className="w-full px-6 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                             {projects.map(p => (
@@ -236,7 +245,7 @@ function CompareView() {
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                     >
-                        <div className="max-w-md w-full text-center space-y-6">
+                        <div className="max-w-lg w-full text-center space-y-6">
                             <div className="relative group mx-auto w-24 h-24 mb-6">
                                 <div className="absolute inset-0 bg-cyber-accent/20 rounded-full blur-2xl group-hover:bg-cyber-accent/40 transition-all animate-pulse" />
                                 <div className="relative flex items-center justify-center w-full h-full glass rounded-full border border-cyber-accent/30 group-hover:border-cyber-accent transition-all">
@@ -290,7 +299,7 @@ function CompareView() {
                                 </h3>
 
                                 <div className="space-y-4">
-                                    <p className="text-sm text-cyber-text-muted leading-relaxed">{summary}</p>
+                                    <p className="text-sm text-cyber-text-muted leading-relaxed">{summaryText}</p>
 
                                     {comparisonResults.length > 0 && (
                                         <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">

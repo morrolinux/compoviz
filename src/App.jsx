@@ -288,16 +288,17 @@ export default function App() {
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Mobile sidebar overlay */}
-          {isMobile && sidebarOpen && (
+          {/* Mobile sidebar overlay - hidden in Compare view */}
+          {view !== 'compare' && isMobile && sidebarOpen && (
             <div
               className="mobile-sidebar-overlay"
               onClick={() => setSidebarOpen(false)}
             />
           )}
 
-          {/* Left Sidebar - overlay on mobile, inline on desktop */}
+          {/* Left Sidebar - overlay on mobile, inline on desktop, hidden in Compare view */}
           <aside className={`
+            ${view === 'compare' ? 'hidden' : ''}
             ${isMobile ? 'sidebar-mobile' : ''}
             ${isMobile && sidebarOpen ? 'open' : ''}
             ${!isMobile && sidebarOpen ? 'w-64' : ''}
