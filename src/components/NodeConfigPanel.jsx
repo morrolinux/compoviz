@@ -34,6 +34,13 @@ const NodeConfigPanel = memo(({
         onUpdate?.(newData);
     }, [localData, onUpdate]);
 
+    // Update multiple fields at once
+    const updateMulti = useCallback((updates) => {
+        const newData = { ...localData, ...updates };
+        setLocalData(newData);
+        onUpdate?.(newData);
+    }, [localData, onUpdate]);
+
     // Update nested fields
     const updateNested = useCallback((path, value) => {
         const keys = path.split('.');
@@ -104,6 +111,7 @@ const NodeConfigPanel = memo(({
                     <SecretConfig
                         data={localData}
                         update={update}
+                        updateMulti={updateMulti}
                     />
                 );
             case 'config':
@@ -111,6 +119,7 @@ const NodeConfigPanel = memo(({
                     <ConfigConfig
                         data={localData}
                         update={update}
+                        updateMulti={updateMulti}
                     />
                 );
             default:

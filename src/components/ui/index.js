@@ -9,3 +9,4 @@ export { Select } from './Select';
 export { Section } from './Section';
 export { KeyValueEditor } from './KeyValueEditor';
 export { ArrayEditor } from './ArrayEditor';
+export { TextArea } from './TextArea';
