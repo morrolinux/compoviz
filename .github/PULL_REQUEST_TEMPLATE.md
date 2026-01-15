@@ -22,6 +22,7 @@ Fixes #(issue number)
 - [ ] I have added comments to complex code sections
 - [ ] My changes follow the existing code style
 - [ ] I have checked that there are no conflicts with the base branch
+- [ ] I have bumped/incremented the version in package.json using (https://semver.org/)
 
 ## Screenshots (if applicable)
 <!-- Add screenshots to help explain your changes -->

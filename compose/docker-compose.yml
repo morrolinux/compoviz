@@ -1,0 +1,27 @@
+# For docker deployment using image
+name: compoviz
+
+services:
+  compoviz:
+    image: ghcr.io/adavesik/compoviz:latest
+    container_name: compoviz
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    ##(Optional) Example labels with runtipi and traefik integration
+    # labels:
+    #   # Runtipi-compatible labels
+    #   runtipi.managed: "true"
+    #   traefik.enable: "true"
+    #   traefik.http.routers.compoviz.rule: PathPrefix("/")
+    #   traefik.http.services.compoviz.loadbalancer.server.port: "80"
+
+## (Optional) Examples of using a default named bridge network or an external proxy network)
+#     networks:
+#       - default
+#       - your-proxy-network
+# networks:
+#   default:
+#     name: compoviz_network
+#   your-proxy-network:
+#     external: true
