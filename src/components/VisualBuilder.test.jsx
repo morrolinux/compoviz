@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '../test/utils.jsx';
+import { render, screen } from '../test/utils.jsx';
 import { Suspense } from 'react';
 import VisualBuilder from './VisualBuilder.jsx';
 
