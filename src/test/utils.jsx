@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { render } from '@testing-library/react';
 import { ComposeProvider } from '../hooks/useCompose.jsx';
 import { UIProvider } from '../context/UIContext.jsx';
@@ -5,7 +6,7 @@ import { UIProvider } from '../context/UIContext.jsx';
 /**
  * Custom render function that wraps components with all necessary providers
  */
-export function renderWithProviders(ui, { initialComposeState, initialUIState, ...renderOptions } = {}) {
+export function renderWithProviders(ui, renderOptions = {}) {
     function Wrapper({ children }) {
         return (
             <UIProvider>

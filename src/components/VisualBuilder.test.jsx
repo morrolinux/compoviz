@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { render } from '../test/utils.jsx';
 import { Suspense } from 'react';
 import VisualBuilder from './VisualBuilder.jsx';

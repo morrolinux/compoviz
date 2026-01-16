@@ -1,3 +1,5 @@
+/* global vi, global */
+/* eslint-disable no-unused-vars */
 import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
