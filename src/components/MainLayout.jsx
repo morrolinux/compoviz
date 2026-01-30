@@ -1,4 +1,4 @@
-import { useCallback, lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import {
     Server, Plus, Download, Upload, Search, Menu, Eye, Code,
     Layers, Undo2, Redo2, Sparkles, GitCompare, PenTool,
@@ -8,6 +8,8 @@ import {
 // Hooks
 import { useCompose } from '../hooks/useCompose.jsx';
 import { useUI } from '../context/UIContext';
+import { useFileImport } from '../hooks/useFileImport.js';
+import { useProjectActions } from '../hooks/useProjectActions.js';
 import { generateGraphviz } from '../utils/graphviz';
 import { serviceTemplates } from '../data/templates';
 
@@ -59,7 +61,6 @@ export default function MainLayout() {
         codePreviewWidth,
         isResizing,
         showMobileCode,
-        isDragging,
         setActiveView,
         setSidebarOpen,
         setSelected,
@@ -67,67 +68,28 @@ export default function MainLayout() {
         setShowTemplates,
         setIsResizing,
         setShowMobileCode,
-        setIsDragging,
     } = useUI();
 
-    // Handlers
-    const handleAdd = (type) => {
-        const name = prompt(`Enter ${type.slice(0, -1)} name:`);
-        if (name?.trim()) {
-            dispatch({ type: `ADD_${type.slice(0, -1).toUpperCase()}`, name: name.trim() });
-            setSelected({ type, name: name.trim() });
-        }
-    };
+    // File Import Hook
+    const { isDragging, setIsDragging, collectDroppedFiles, handleImport } = useFileImport(
+        loadFiles,
+        setActiveView,
+        isMobile
+    );
 
-    const handleAddFromTemplate = (templateName) => {
-        const template = serviceTemplates[templateName];
-        if (!template) return;
+    // Project Actions Hook
+    const { handleAdd, handleAddFromTemplate: handleAddFromTemplateBase, handleDelete, handleUpdate, handleClearAll } = useProjectActions(
+        dispatch,
+        selected,
+        setSelected,
+        setShowTemplates,
+        resetProject
+    );
 
-        const serviceName = template.name || templateName;
-        dispatch({ type: 'ADD_SERVICE', name: serviceName });
-        dispatch({ type: 'UPDATE_SERVICE', name: serviceName, data: template.config });
+    // Wrapper to inject serviceTemplates dependency
+    const handleAddFromTemplate = (templateName) => handleAddFromTemplateBase(templateName, serviceTemplates);
 
-        // Add suggested volume if exists
-        if (template.suggestedVolume) {
-            dispatch({ type: 'ADD_VOLUME', name: template.suggestedVolume.name });
-            if (template.suggestedVolume.config) {
-                dispatch({ type: 'UPDATE_VOLUME', name: template.suggestedVolume.name, data: template.suggestedVolume.config });
-            }
-        }
-
-        setSelected({ type: 'services', name: serviceName });
-        setShowTemplates(false);
-    };
-
-    const handleDelete = (type, name) => {
-        if (confirm(`Delete ${name}?`)) {
-            dispatch({ type: `DELETE_${type.slice(0, -1).toUpperCase()}`, name });
-            if (selected?.name === name) setSelected(null);
-        }
-    };
-
-    const handleUpdate = useCallback((data) => {
-        if (!selected) return;
-        dispatch({ type: `UPDATE_${selected.type.slice(0, -1).toUpperCase()}`, name: selected.name, data });
-    }, [selected, dispatch]);
-
-    const handleImport = async (content, files = []) => {
-        try {
-            const result = await loadFiles(content, files);
-            if (!result.success) {
-                alert('Invalid YAML: ' + (result.error || 'Unknown error'));
-                return;
-            }
-            // On mobile, switch to diagram mode to show the imported config visualized
-            if (isMobile) {
-                setActiveView('diagram');
-            }
-        } catch (error) {
-            console.error('Import failed:', error);
-            alert('Import failed: ' + error.message);
-        }
-    };
-
+    // Additional handlers not extracted to hooks
     const handleExportDiagram = async () => {
         const svg = document.querySelector('.mermaid-container svg');
         if (!svg) return;
@@ -139,12 +101,6 @@ export default function MainLayout() {
         a.download = 'docker-compose-diagram.svg';
         a.click();
         URL.revokeObjectURL(url);
-    };
-
-    const handleClearAll = () => {
-        if (resetProject()) {
-            setSelected(null);
-        }
     };
 
     const handleWhatsNewAction = async (action) => {
@@ -164,58 +120,6 @@ export default function MainLayout() {
         }
     };
 
-    const collectDroppedFiles = async (dataTransfer) => {
-        const files = [];
-        const items = Array.from(dataTransfer?.items || []);
-
-        const readFileEntry = (entry) => new Promise((resolve) => {
-            entry.file((file) => resolve(file));
-        });
-
-        const readAllEntries = async (reader) => new Promise((resolve) => {
-            const entries = [];
-            const readChunk = () => {
-                reader.readEntries((batch) => {
-                    if (!batch.length) {
-                        resolve(entries);
-                        return;
-                    }
-                    entries.push(...batch);
-                    readChunk();
-                });
-            };
-            readChunk();
-        });
-
-        const walkEntry = async (entry) => {
-            if (!entry) return;
-            if (entry.isFile) {
-                const file = await readFileEntry(entry);
-                files.push({ file, fullPath: entry.fullPath });
-                return;
-            }
-            if (entry.isDirectory) {
-                const reader = entry.createReader();
-                const entries = await readAllEntries(reader);
-                for (const child of entries) {
-                    await walkEntry(child);
-                }
-            }
-        };
-
-        const entries = items
-            .map((item) => item.webkitGetAsEntry?.())
-            .filter(Boolean);
-
-        if (entries.length > 0) {
-            for (const entry of entries) {
-                await walkEntry(entry);
-            }
-            return files;
-        }
-
-        return Array.from(dataTransfer?.files || []).map((file) => ({ file, fullPath: '' }));
-    };
 
     // Render the appropriate editor based on selection
     const renderEditor = () => {
