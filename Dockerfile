@@ -26,6 +26,8 @@ FROM nginx:stable-alpine AS production
 COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy embed test pages (not part of Vite build) into the static site so they are available in production
 COPY --from=builder /app/embed /usr/share/nginx/html/embed
+# Expose the reusable embed helper at the site root for easy inclusion: /compoviz-embed.js
+COPY --from=builder /app/embed/compoviz-embed.js /usr/share/nginx/html/compoviz-embed.js
 
 # Custom nginx config for SPA routing
 RUN echo 'server { \
