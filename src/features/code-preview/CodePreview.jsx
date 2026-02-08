@@ -199,11 +199,8 @@ export const CodePreview = () => {
                 <div className="flex gap-1">
                     {editMode ? (
                         <>
-                            <button onClick={handleSave} className="btn btn-primary text-xs py-1">
-                                <CheckCircle size={14} className="mr-1" />Aggiorna il grafo
-                            </button>
                             <button onClick={() => setEditMode(false)} className="btn btn-secondary text-xs py-1">
-                                <X size={14} className="mr-1" />Cancel
+                                <X size={14} className="mr-1" />Chiudi
                             </button>
                         </>
                     ) : (

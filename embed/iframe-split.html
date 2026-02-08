@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <div class="toolbar">
+  <div class="toolbar" id="toolbar">
     <strong>CompoViz Splitview Test</strong>
     <span class="muted">&nbsp;— broker / iframe communication</span>
     <div style="flex:1"></div>
@@ -28,9 +28,6 @@
   <div style="display:flex;gap:8px;height:calc(100% - 56px)">
     <div style="flex:1;display:flex;flex-direction:column">
       <div style="padding:8px;background:#071e2c;display:flex;gap:8px;align-items:center">
-        <button id="sendYaml" class="btn">Send sample YAML → editor</button>
-        <button id="reqExport" class="btn">Request export (editor)</button>
-        <button id="clearLog" class="btn" style="background:#666">Clear log</button>
         <label style="margin-left:8px;color:#9fb3c8">Editor</label>
       </div>
       <iframe id="editor" src="" title="CompoViz Editor"></iframe>
@@ -75,11 +72,13 @@
       editor.src = `${origin}/?mode=editor&session=test-session`;
       graph.src = `${origin}/?mode=graph&session=test-session`;
 
-      // Respect debug flag to optionally show broker panel
+      // Respect debug flag to optionally show broker panel and toolbar
       const qs = location.search || '';
       const showDebug = qs.includes('debug');
       const brokerPanel = document.getElementById('brokerPanel');
+      const toolbarEl = document.getElementById('toolbar');
       if (!showDebug && brokerPanel) brokerPanel.style.display = 'none';
+      if (!showDebug && toolbarEl) toolbarEl.style.display = 'none';
 
       function log(msg){
         const row = document.createElement('div');
@@ -119,24 +118,7 @@
       }, false);
 
       // UI actions
-      document.getElementById('sendYaml').addEventListener('click', () => {
-        const sample = `version: '3.8'\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n`;
-        const msg = { type: 'CV_LOAD_YAML', payload: { yaml: sample } };
-        const token = tokenInput.value && tokenInput.value.trim() ? tokenInput.value.trim() : null;
-        if (token) msg.token = token;
-        editor.contentWindow.postMessage(msg, origin);
-        log('Sent CV_LOAD_YAML to editor');
-      });
-
-      document.getElementById('reqExport').addEventListener('click', () => {
-        const msg = { type: 'CV_EXPORT_YAML' };
-        const token = tokenInput.value && tokenInput.value.trim() ? tokenInput.value.trim() : null;
-        if (token) msg.token = token;
-        editor.contentWindow.postMessage(msg, origin);
-        log('Sent CV_EXPORT_YAML to editor');
-      });
-
-      document.getElementById('clearLog').addEventListener('click', () => { logEl.innerHTML = ''; lastStateEl.textContent = ''; });
+      // UI actions removed: sample send / export / clear-log controls
 
       log('Broker ready — listening for iframe messages');
     })();

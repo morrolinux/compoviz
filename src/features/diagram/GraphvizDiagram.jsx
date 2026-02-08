@@ -127,10 +127,11 @@ export const GraphvizDiagram = memo(({ dot, onNodeClick, onAdd }) => {
         URL.revokeObjectURL(url);
     }, []);
 
-    // Context menu
+    // Context menu - disabled: prevent adding resources via right-click
     const handleContextMenu = (e) => {
+        // Prevent native menu and do not open custom context menu
         e.preventDefault();
-        setContextMenu({ x: e.clientX, y: e.clientY });
+        // Intentionally no-op to disable adding resources from the graph
     };
 
     // Wheel zoom
@@ -158,10 +159,7 @@ export const GraphvizDiagram = memo(({ dot, onNodeClick, onAdd }) => {
                 <IconButton icon={Download} onClick={downloadSvg} title="Download SVG" />
             </div>
 
-            {/* Hint for right-click */}
-            <div className="absolute top-2 left-2 z-10 text-xs text-cyber-text-muted glass rounded-lg px-3 py-1.5">
-                💡 Right-click to add resources
-            </div>
+            {/* Right-click hint removed - context menu disabled */}
 
             {/* Legend */}
             <div className="absolute bottom-4 left-4 z-10 glass rounded-xl p-4 space-y-2">
@@ -208,15 +206,7 @@ export const GraphvizDiagram = memo(({ dot, onNodeClick, onAdd }) => {
                 />
             </div>
 
-            {/* Context Menu */}
-            {contextMenu && (
-                <ContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    onClose={() => setContextMenu(null)}
-                    onAdd={onAdd}
-                />
-            )}
+            {/* Context menu intentionally disabled */}
         </div>
     );
 });
