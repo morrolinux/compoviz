@@ -24,6 +24,8 @@ FROM nginx:stable-alpine AS production
 
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy embed test pages (not part of Vite build) into the static site so they are available in production
+COPY --from=builder /app/embed /usr/share/nginx/html/embed
 
 # Custom nginx config for SPA routing
 RUN echo 'server { \
