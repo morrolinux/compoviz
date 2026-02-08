@@ -136,103 +136,110 @@ export default function MainLayout() {
 
     // Render the appropriate editor based on selection
     const renderEditor = () => {
-        if (!selected) return (
-            <div
-                className={`h-full flex flex-col items-center justify-center text-cyber-text-muted border-2 border-dashed rounded-xl transition-all duration-300 m-4 ${isDragging ? 'border-cyber-accent bg-cyber-accent/5' : 'border-transparent'}`}
-                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
-                onDrop={async (e) => {
-                    e.preventDefault();
-                    setIsDragging(false);
-                    const droppedFiles = await collectDroppedFiles(e.dataTransfer);
-                    const files = droppedFiles.filter(({ file }) => (
-                        file.name.endsWith('.yml') || file.name.endsWith('.yaml') || file.name === '.env'
-                    )).map(({ file, fullPath }) => {
-                        if (!fullPath) return file;
-                        return {
-                            name: file.name,
-                            webkitRelativePath: fullPath.replace(/^\//, ''),
-                            text: () => file.text()
-                        };
-                    });
-                    if (files.length === 0) return;
-                    const primaryFile = files.find((file) => (
-                        file.name === 'docker-compose.yml' || file.name === 'docker-compose.yaml'
-                    )) || files[0];
-                    const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
-                    const content = await primaryFile.text();
-                                console.debug('[MainLayout] onDrop -> importing', { primary: primaryFile.name, total: files.length });
-                                handleImport(content, orderedFiles);
-                }}
-            >
-                <Layers size={48} className={`mb-4 transition-all duration-300 ${isDragging ? 'text-cyber-accent scale-110' : 'opacity-50'}`} />
-                <p className="text-lg mb-2 font-medium">Select a resource to edit</p>
-                <p className="text-sm mb-8">Or add a new service, network, or volume</p>
+        if (!selected) {
+            // If embedded editor mode, show the raw YAML editor/preview instead of import CTA
+            if (embedMode === 'editor') {
+                return <CodePreview />;
+            }
 
-                <div className="flex flex-col items-center gap-4 animate-fade-in">
-                    <div className={`p-6 rounded-xl glass transition-all duration-300 ${isDragging ? 'border-cyber-accent shadow-glow' : 'border border-cyber-border/30'}`}>
-                        <div className="flex flex-col items-center gap-2 pointer-events-none">
-                            <Upload size={32} className={`transition-colors duration-300 ${isDragging ? 'text-cyber-accent animate-bounce' : 'text-cyber-text-muted'}`} />
-                            <p className="text-sm font-medium">Drag & drop docker-compose.yml</p>
-                            <span className="text-xs text-cyber-text-muted">Supports .yml and .yaml</span>
+            return (
+                <div
+                    className={`h-full flex flex-col items-center justify-center text-cyber-text-muted border-2 border-dashed rounded-xl transition-all duration-300 m-4 ${isDragging ? 'border-cyber-accent bg-cyber-accent/5' : 'border-transparent'}`}
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
+                    onDrop={async (e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const droppedFiles = await collectDroppedFiles(e.dataTransfer);
+                        const files = droppedFiles.filter(({ file }) => (
+                            file.name.endsWith('.yml') || file.name.endsWith('.yaml') || file.name === '.env'
+                        )).map(({ file, fullPath }) => {
+                            if (!fullPath) return file;
+                            return {
+                                name: file.name,
+                                webkitRelativePath: fullPath.replace(/^\//, ''),
+                                text: () => file.text()
+                            };
+                        });
+                        if (files.length === 0) return;
+                        const primaryFile = files.find((file) => (
+                            file.name === 'docker-compose.yml' || file.name === 'docker-compose.yaml'
+                        )) || files[0];
+                        const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
+                        const content = await primaryFile.text();
+                                    console.debug('[MainLayout] onDrop -> importing', { primary: primaryFile.name, total: files.length });
+                                    handleImport(content, orderedFiles);
+                    }}
+                >
+                    <Layers size={48} className={`mb-4 transition-all duration-300 ${isDragging ? 'text-cyber-accent scale-110' : 'opacity-50'}`} />
+                    <p className="text-lg mb-2 font-medium">Select a resource to edit</p>
+                    <p className="text-sm mb-8">Or add a new service, network, or volume</p>
+
+                    <div className="flex flex-col items-center gap-4 animate-fade-in">
+                        <div className={`p-6 rounded-xl glass transition-all duration-300 ${isDragging ? 'border-cyber-accent shadow-glow' : 'border border-cyber-border/30'}`}>
+                            <div className="flex flex-col items-center gap-2 pointer-events-none">
+                                <Upload size={32} className={`transition-colors duration-300 ${isDragging ? 'text-cyber-accent animate-bounce' : 'text-cyber-text-muted'}`} />
+                                <p className="text-sm font-medium">Drag & drop docker-compose.yml</p>
+                                <span className="text-xs text-cyber-text-muted">Supports .yml and .yaml</span>
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="flex items-center gap-3 w-full">
-                        <div className="h-px bg-cyber-border/50 flex-1"></div>
-                        <span className="text-xs text-cyber-text-muted uppercase tracking-wider">or</span>
-                        <div className="h-px bg-cyber-border/50 flex-1"></div>
-                    </div>
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="h-px bg-cyber-border/50 flex-1"></div>
+                            <span className="text-xs text-cyber-text-muted uppercase tracking-wider">or</span>
+                            <div className="h-px bg-cyber-border/50 flex-1"></div>
+                        </div>
 
-                    <label className="btn btn-secondary cursor-pointer gap-2 flex items-center px-6 hover:bg-cyber-surface-light transition-all">
-                        <Upload size={16} />
-                        <span>Import Files</span>
-                        <input
-                            type="file"
-                            accept=".yml,.yaml,.env"
-                            multiple
-                            className="hidden"
-                            onChange={async (e) => {
-                                const files = Array.from(e.target.files || []).filter((file) => (
-                                    file.name.endsWith('.yml') || file.name.endsWith('.yaml') || file.name === '.env'
-                                ));
-                                if (files.length === 0) return;
-                                const primaryFile = files.find((file) => (
-                                    file.name === 'docker-compose.yml' || file.name === 'docker-compose.yaml'
-                                )) || files[0];
-                                const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
-                                const content = await primaryFile.text();
-                                console.debug('[MainLayout] Import Files input ->', { primary: primaryFile.name, total: files.length });
-                                handleImport(content, orderedFiles);
-                            }}
-                        />
-                    </label>
-                    <label className="btn btn-secondary cursor-pointer gap-2 flex items-center px-6 hover:bg-cyber-surface-light transition-all">
-                        <Upload size={16} />
-                        <span>Import Folder</span>
-                        <input
-                            type="file"
-                            accept=".yml,.yaml,.env"
-                            webkitdirectory="true"
-                            className="hidden"
-                            onChange={async (e) => {
-                                const files = Array.from(e.target.files || []).filter((file) => (
-                                    file.name.endsWith('.yml') || file.name.endsWith('.yaml') || file.name === '.env'
-                                ));
-                                if (files.length === 0) return;
-                                const primaryFile = files.find((file) => (
-                                    file.name === 'docker-compose.yml' || file.name === 'docker-compose.yaml'
-                                )) || files[0];
-                                const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
-                                const content = await primaryFile.text();
-                                console.debug('[MainLayout] Import Folder input ->', { primary: primaryFile.name, total: files.length });
-                                handleImport(content, orderedFiles);
-                            }}
-                        />
-                    </label>
+                        <label className="btn btn-secondary cursor-pointer gap-2 flex items-center px-6 hover:bg-cyber-surface-light transition-all">
+                            <Upload size={16} />
+                            <span>Import Files</span>
+                            <input
+                                type="file"
+                                accept=".yml,.yaml,.env"
+                                multiple
+                                className="hidden"
+                                onChange={async (e) => {
+                                    const files = Array.from(e.target.files || []).filter((file) => (
+                                        file.name.endsWith('.yml') || file.name.endsWith('.yaml') || file.name === '.env'
+                                    ));
+                                    if (files.length === 0) return;
+                                    const primaryFile = files.find((file) => (
+                                        file.name === 'docker-compose.yml' || file.name === 'docker-compose.yaml'
+                                    )) || files[0];
+                                    const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
+                                    const content = await primaryFile.text();
+                                    console.debug('[MainLayout] Import Files input ->', { primary: primaryFile.name, total: files.length });
+                                    handleImport(content, orderedFiles);
+                                }}
+                            />
+                        </label>
+                        <label className="btn btn-secondary cursor-pointer gap-2 flex items-center px-6 hover:bg-cyber-surface-light transition-all">
+                            <Upload size={16} />
+                            <span>Import Folder</span>
+                            <input
+                                type="file"
+                                accept=".yml,.yaml,.env"
+                                webkitdirectory="true"
+                                className="hidden"
+                                onChange={async (e) => {
+                                    const files = Array.from(e.target.files || []).filter((file) => (
+                                        file.name.endsWith('.yml') || file.name.endsWith('.yaml') || file.name === '.env'
+                                    ));
+                                    if (files.length === 0) return;
+                                    const primaryFile = files.find((file) => (
+                                        file.name === 'docker-compose.yml' || file.name === 'docker-compose.yaml'
+                                    )) || files[0];
+                                    const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
+                                    const content = await primaryFile.text();
+                                    console.debug('[MainLayout] Import Folder input ->', { primary: primaryFile.name, total: files.length });
+                                    handleImport(content, orderedFiles);
+                                }}
+                            />
+                        </label>
+                    </div>
                 </div>
-            </div>
-        );
+            );
+        }
 
         const { type, name } = selected;
         const item = state[type]?.[name];
