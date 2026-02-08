@@ -69,6 +69,16 @@ export function useHistoryReducer(reducer, initialState) {
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e) => {
+            // If focus is inside a text input or editable element, don't intercept
+            try {
+                const active = document.activeElement;
+                const tag = active && active.tagName && active.tagName.toLowerCase();
+                const isEditable = active && (active.isContentEditable || tag === 'textarea' || tag === 'input' || tag === 'select');
+                if (isEditable) return; // allow native undo in inputs
+            } catch (err) {
+                // ignore
+            }
+
             if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
                 e.preventDefault();
                 if (e.shiftKey) {

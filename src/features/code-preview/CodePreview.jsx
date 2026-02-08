@@ -18,6 +18,7 @@ export const CodePreview = () => {
     const folderInputRef = useRef(null);
     const autosaveTimeoutRef = useRef(null);
     const lastSavedRef = useRef(yamlCode);
+    const isDirtyRef = useRef(false);
 
     const splitComment = (line) => {
         const hashIndex = line.indexOf('#');
@@ -93,6 +94,7 @@ export const CodePreview = () => {
 
     const handleEdit = () => {
         setEditValue(yamlCode);
+        isDirtyRef.current = false;
         setEditMode(true);
     };
 
@@ -136,20 +138,25 @@ export const CodePreview = () => {
     };
 
     // Keep editValue in sync when entering edit mode or when yamlCode changes
+    // Sync editValue when entering edit mode, but do not overwrite user's in-progress edits
     useEffect(() => {
-        if (editMode) {
+        if (editMode && !isDirtyRef.current) {
             setEditValue(yamlCode);
+            lastSavedRef.current = yamlCode;
+            isDirtyRef.current = false;
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editMode]);
+    }, [editMode, yamlCode]);
 
-    // Force edit mode when embedded in editor mode (run only when embedMode changes)
+    // Force edit mode when embedded in editor mode
     useEffect(() => {
         if (embedMode === 'editor') {
             setEditMode(true);
-            setEditValue(yamlCode);
+            if (!isDirtyRef.current) {
+                setEditValue(yamlCode);
+                lastSavedRef.current = yamlCode;
+                isDirtyRef.current = false;
+            }
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [embedMode]);
 
     // Autosave: save 5s after last change
@@ -165,6 +172,10 @@ export const CodePreview = () => {
                 const result = await loadFiles(editValue);
                 if (result && result.success) {
                     lastSavedRef.current = editValue;
+                    // Only clear dirty if the composed YAML matches the editor content
+                    isDirtyRef.current = !(yamlCode !== undefined && yamlCode !== null) ? false : (yamlCode !== editValue);
+                    // If the generated YAML equals editValue, mark not dirty
+                    if (yamlCode === editValue) isDirtyRef.current = false;
                 }
             } catch (err) {
                 console.error('Autosave failed:', err);
@@ -177,7 +188,7 @@ export const CodePreview = () => {
                 autosaveTimeoutRef.current = null;
             }
         };
-    }, [editMode, editValue, loadFiles]);
+    }, [editMode, editValue, loadFiles, yamlCode]);
 
     return (
         <div className="h-full flex flex-col">
@@ -210,12 +221,12 @@ export const CodePreview = () => {
             </div>
             <div className="flex-1 overflow-auto p-4">
                 {editMode ? (
-                    <textarea
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        className="w-full h-full code-preview bg-transparent resize-none focus:outline-none"
-                        spellCheck={false}
-                    />
+                        <textarea
+                            value={editValue}
+                            onChange={e => { setEditValue(e.target.value); isDirtyRef.current = true; }}
+                            className="w-full h-full code-preview bg-transparent resize-none focus:outline-none"
+                            spellCheck={false}
+                        />
                 ) : (
                     <pre className="code-preview">
                         {yamlCode.split('\n').map((line, i, arr) => highlightLine(line, i, arr.length))}
