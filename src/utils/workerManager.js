@@ -26,12 +26,19 @@ export function createParserWorker() {
         if (worker) return;
 
         try {
+            console.debug('[workerManager] initWorker - creating worker');
             worker = new Worker(
                 new URL('../workers/parserWorker.js', import.meta.url),
                 { type: 'module' }
             );
 
             worker.onmessage = (event) => {
+                try {
+                    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'worker_onmessage', type: event.data && event.data.type, id: event.data && event.data.id } }, '*');
+                    }
+                } catch (e) {}
+                console.debug('[workerManager] onmessage', event.data && event.data.type);
                 const { type, payload, id } = event.data;
                 const request = pendingRequests.get(id);
 
@@ -74,6 +81,12 @@ export function createParserWorker() {
 
             pendingRequests.set(id, { resolve, reject });
 
+            console.debug('[workerManager] postMessage PARSE id=', id, 'len=', yamlString && yamlString.length);
+            try {
+                if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'worker_post_parse', id, length: yamlString && yamlString.length } }, '*');
+                }
+            } catch (e) {}
             worker.postMessage({
                 type: MESSAGE_TYPES.PARSE,
                 payload: { yamlString, options },

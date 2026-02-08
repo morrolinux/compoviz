@@ -18,6 +18,11 @@ export function ComposeProvider({ children }) {
     // Use history-enabled reducer for undo/redo
     const { state, dispatch, undo, redo, canUndo, canRedo } = useHistoryReducer(composeReducer, initialState);
 
+    // Embed-related params and token (for postMessage validation)
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const embedToken = urlParams.get('embed_token') || null;
+    const embedMode = urlParams.get('mode') || null; // e.g. 'editor' | 'graph' | 'full'
+
     // Parser metadata state
     const [profiles, setProfiles] = useState([]);
     const [activeProfiles, setActiveProfiles] = useState([]);
@@ -28,6 +33,9 @@ export function ComposeProvider({ children }) {
     const [profileCounts, setProfileCounts] = useState({});
     const [sourceYaml, setSourceYaml] = useState('');
     const lastFilesRef = useRef([]);
+    const suppressBroadcastRef = useRef(false);
+    const broadcastTimeoutRef = useRef(null);
+    const lastBroadcastKeyRef = useRef(null);
 
     // Generate YAML and errors on state change
     const yamlCode = useMemo(() => generateYaml(state), [state]);
@@ -76,6 +84,8 @@ export function ComposeProvider({ children }) {
         }
     }, [dispatch]);
 
+    
+
     // Save to localStorage on state change
     useEffect(() => {
         localStorage.setItem('docker-compose-state', JSON.stringify(state));
@@ -93,6 +103,12 @@ export function ComposeProvider({ children }) {
 
     // Action: Load files (import YAML) - Now with Web Worker!
     const loadFiles = useCallback(async (content, files = [], overrides = {}) => {
+        console.debug('[useCompose] loadFiles called', { length: content?.length, files: (files || []).length, overrides });
+        try {
+            if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'loadFiles_called', length: content?.length || 0, files: (files || []).length } }, '*');
+            }
+        } catch (e) {}
         try {
             // Build fileMap from uploaded files
             const fileMap = {};
@@ -150,6 +166,12 @@ export function ComposeProvider({ children }) {
                 setParserErrors(result.errors || []);
                 setSourceYaml(content);
 
+                    try {
+                        if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                            window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'loadFiles_result', success: true, profiles: (result.profiles || []).length } }, '*');
+                        }
+                    } catch (e) {}
+
                 return {
                     success: true,
                     profiles: result.profiles,
@@ -171,8 +193,18 @@ export function ComposeProvider({ children }) {
                 setVariables([]);
                 setUndefinedVariables([]);
                 setParserErrors([]);
+                try {
+                    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'loadFiles_result', success: true, fallback: true } }, '*');
+                    }
+                } catch (e) {}
                 return { success: true, fallback: true };
             } catch {
+                try {
+                    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'loadFiles_result', success: false, error: (e && e.message) || 'unknown' } }, '*');
+                    }
+                } catch (e2) {}
                 return { success: false, error: e.message };
             }
         }
@@ -232,6 +264,57 @@ export function ComposeProvider({ children }) {
             }
         }
     }, [yamlCode, sourceYaml, loadFiles]);
+
+    // Listen for embed messages (postMessage) to import YAML or set state
+    useEffect(() => {
+        function handleMessage(event) {
+            try {
+                const data = event.data || {};
+                console.debug('[useCompose] postMessage received', data && data.type);
+
+                // If embedToken is configured, require it to match
+                if (embedToken && data.token && data.token !== embedToken) return;
+
+                switch (data.type) {
+                    case 'CV_LOAD_YAML':
+                        if (data.payload && data.payload.yaml) {
+                            console.debug('[useCompose] CV_LOAD_YAML payload received');
+                            loadFiles(data.payload.yaml);
+                        }
+                        break;
+                    case 'CV_STATE_UPDATE':
+                        if (data.payload && data.payload.state) {
+                            try {
+                                suppressBroadcastRef.current = true;
+                                dispatch({ type: 'SET_STATE', payload: data.payload.state });
+                                if (data.payload.yaml) setSourceYaml(data.payload.yaml);
+                                if (data.payload.errors) setParserErrors(data.payload.errors || []);
+                            } finally {
+                                // Allow broadcast on next tick after state applied
+                                setTimeout(() => { suppressBroadcastRef.current = false; }, 0);
+                            }
+                        }
+                        break;
+                    case 'CV_SET_STATE':
+                        if (data.payload && data.payload.state) {
+                            dispatch({ type: 'SET_STATE', payload: data.payload.state });
+                        }
+                        break;
+                    case 'CV_EXPORT_YAML':
+                        handleExport();
+                        break;
+                    default:
+                        break;
+                }
+            } catch (e) {
+                // ignore malformed messages
+            }
+        }
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loadFiles, dispatch, handleExport]);
 
     // Action: Update environment variable (with re-parse)
     const updateEnvironment = useCallback(async (key, value) => {
@@ -300,6 +383,53 @@ export function ComposeProvider({ children }) {
         }
     }, [yamlCode, sourceYaml, loadFiles]);
 
+    // Broadcast state changes to parent (if embedded)
+    // Debounced + dedup to avoid flooding parent with rapid updates (prevents flicker)
+    useEffect(() => {
+        // Build a lightweight key to detect identical payloads
+        const key = `${yamlCode || ''}::${JSON.stringify(errors || [])}`;
+
+        try {
+            if (suppressBroadcastRef.current) return;
+
+            // If identical to last broadcast, skip
+            if (lastBroadcastKeyRef.current === key) return;
+
+            // Debounce posting to parent (250ms)
+            if (broadcastTimeoutRef.current) clearTimeout(broadcastTimeoutRef.current);
+            broadcastTimeoutRef.current = setTimeout(() => {
+                try {
+                    const msg = {
+                        type: 'CV_STATE_UPDATE',
+                        payload: {
+                            state,
+                            yaml: yamlCode,
+                            errors
+                        },
+                        token: embedToken
+                    };
+                    if (window && window.parent && window.parent !== window) {
+                        window.parent.postMessage(msg, '*');
+                    }
+                    lastBroadcastKeyRef.current = key;
+                } catch (e) {
+                    // ignore
+                } finally {
+                    broadcastTimeoutRef.current = null;
+                }
+            }, 250);
+        } catch (e) {
+            // ignore
+        }
+
+        return () => {
+            if (broadcastTimeoutRef.current) {
+                clearTimeout(broadcastTimeoutRef.current);
+                broadcastTimeoutRef.current = null;
+            }
+        };
+    }, [state, yamlCode, errors, embedToken]);
+
     const value = {
         // State
         state,
@@ -333,6 +463,9 @@ export function ComposeProvider({ children }) {
         setActiveProfiles: setActiveProfilesAction,
         updateEnvironment,
         setEnvironment: setEnvironmentAction,
+        // Embed info
+        embedMode,
+        embedToken,
     };
 
     return (

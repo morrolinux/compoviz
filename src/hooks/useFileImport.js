@@ -15,6 +15,7 @@ export function useFileImport(loadFiles, setActiveView, isMobile) {
      * Handles both files and directories via FileSystem API
      */
     const collectDroppedFiles = async (dataTransfer) => {
+        console.debug('[useFileImport] collectDroppedFiles called', { items: dataTransfer?.items?.length, files: dataTransfer?.files?.length });
         const files = [];
         const items = Array.from(dataTransfer?.items || []);
 
@@ -73,6 +74,12 @@ export function useFileImport(loadFiles, setActiveView, isMobile) {
      * @param {Array} files - Array of files to import
      */
     const handleImport = async (content, files = []) => {
+        console.debug('[useFileImport] handleImport called', { length: content?.length, files: files.length });
+        try {
+            if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'CV_DEBUG', payload: { event: 'handleImport_called', length: content?.length || 0, files: files.length } }, '*');
+            }
+        } catch (e) {}
         try {
             const result = await loadFiles(content, files);
             if (!result.success) {

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import {
     Server, Plus, Download, Upload, Search, Menu, Eye, Code,
     Layers, Undo2, Redo2, Sparkles, GitCompare, PenTool,
@@ -48,7 +48,7 @@ const BuilderSkeleton = () => (
  */
 export default function MainLayout() {
     // Get data state from ComposeContext
-    const { state, dispatch, errors, undo, redo, canUndo, canRedo, handleExport, loadFiles, resetProject } = useCompose();
+    const { state, dispatch, errors, undo, redo, canUndo, canRedo, handleExport, loadFiles, resetProject, embedMode } = useCompose();
 
     // Get UI state from UIContext
     const {
@@ -69,6 +69,19 @@ export default function MainLayout() {
         setIsResizing,
         setShowMobileCode,
     } = useUI();
+
+    // If embedded with a mode, force the view and hide chrome
+    useEffect(() => {
+        if (!embedMode) return;
+        if (embedMode === 'editor') setActiveView('editor');
+        if (embedMode === 'graph') setActiveView('diagram');
+        // collapse sidebar in embedded modes
+        setSidebarOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [embedMode]);
+
+    const effectiveView = embedMode === 'editor' ? 'editor' : embedMode === 'graph' ? 'diagram' : activeView;
+    const isEmbeddedCompact = embedMode === 'editor' || embedMode === 'graph';
 
     // File Import Hook
     const { isDragging, setIsDragging, collectDroppedFiles, handleImport } = useFileImport(
@@ -148,7 +161,8 @@ export default function MainLayout() {
                     )) || files[0];
                     const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
                     const content = await primaryFile.text();
-                    handleImport(content, orderedFiles);
+                                console.debug('[MainLayout] onDrop -> importing', { primary: primaryFile.name, total: files.length });
+                                handleImport(content, orderedFiles);
                 }}
             >
                 <Layers size={48} className={`mb-4 transition-all duration-300 ${isDragging ? 'text-cyber-accent scale-110' : 'opacity-50'}`} />
@@ -188,6 +202,7 @@ export default function MainLayout() {
                                 )) || files[0];
                                 const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
                                 const content = await primaryFile.text();
+                                console.debug('[MainLayout] Import Files input ->', { primary: primaryFile.name, total: files.length });
                                 handleImport(content, orderedFiles);
                             }}
                         />
@@ -210,6 +225,7 @@ export default function MainLayout() {
                                 )) || files[0];
                                 const orderedFiles = [primaryFile, ...files.filter((file) => file !== primaryFile)];
                                 const content = await primaryFile.text();
+                                console.debug('[MainLayout] Import Folder input ->', { primary: primaryFile.name, total: files.length });
                                 handleImport(content, orderedFiles);
                             }}
                         />
@@ -237,7 +253,8 @@ export default function MainLayout() {
     return (
         <div className="h-screen flex flex-col overflow-hidden">
             {/* Header */}
-            <header className="glass flex items-center justify-between px-4 py-3 border-b border-cyber-border/50">
+            {!isEmbeddedCompact && (
+                <header className="glass flex items-center justify-between px-4 py-3 border-b border-cyber-border/50">
                 <div className="flex items-center gap-4">
                     <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-cyber-surface-light rounded-lg lg:hidden">
                         <Menu size={20} />
@@ -284,12 +301,13 @@ export default function MainLayout() {
                     </div>
                     {activeView === 'diagram' && <IconButton icon={Download} onClick={handleExportDiagram} title="Export Diagram" />}
                 </div>
-            </header>
+                </header>
+            )}
 
             {/* Main Content */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Mobile sidebar overlay - hidden in Compare view */}
-                {activeView !== 'compare' && isMobile && sidebarOpen && (
+                {effectiveView !== 'compare' && isMobile && sidebarOpen && (
                     <div
                         className="mobile-sidebar-overlay"
                         onClick={() => setSidebarOpen(false)}
@@ -297,8 +315,9 @@ export default function MainLayout() {
                 )}
 
                 {/* Left Sidebar - overlay on mobile, inline on desktop, hidden in Compare view */}
+                {!isEmbeddedCompact && (
                 <aside className={`
-          ${activeView === 'compare' ? 'hidden' : ''}
+          ${effectiveView === 'compare' ? 'hidden' : ''}
           ${isMobile ? 'sidebar-mobile' : ''}
           ${isMobile && sidebarOpen ? 'open' : ''}
           ${!isMobile && sidebarOpen ? 'w-64' : ''}
@@ -341,13 +360,14 @@ export default function MainLayout() {
                         <button onClick={handleClearAll} className="w-full text-xs text-cyber-text-muted hover:text-cyber-error transition-colors">Clear All</button>
                     </div>
                 </aside>
+                )}
 
                 {/* Main Panel */}
                 <main className="flex-1 flex overflow-hidden">
-                    {activeView === 'compare' ? (
+                    {effectiveView === 'compare' ? (
                         /* Compare View - Takes full width */
                         <CompareView />
-                    ) : activeView === 'build' ? (
+                    ) : effectiveView === 'build' ? (
                         /* Build View - Visual drag-and-drop builder with React Flow */
                         <div className="flex-1 p-4">
                             <div className="h-full glass rounded-xl overflow-hidden">
@@ -356,7 +376,7 @@ export default function MainLayout() {
                                 </Suspense>
                             </div>
                         </div>
-                    ) : activeView === 'editor' ? (
+                    ) : effectiveView === 'editor' ? (
                         <>
                             {/* Editor Panel */}
                             <div className="flex-1 overflow-auto p-6">{renderEditor()}</div>
@@ -397,35 +417,8 @@ export default function MainLayout() {
             </div>
 
             {/* Footer */}
-            {activeView !== 'compare' && <Footer />}
+            {!isEmbeddedCompact && effectiveView !== 'compare' && <Footer />}
 
-            {/* Mobile YAML Toggle - View Code button */}
-            <div className="xl:hidden fixed bottom-4 right-4 flex gap-2">
-                <button onClick={() => setShowMobileCode(true)} className="btn btn-secondary shadow-lg glass"><Code size={18} className="mr-2" />View Code</button>
-                <button onClick={handleExport} className="btn btn-primary shadow-lg glow"><Download size={18} /></button>
-            </div>
-
-            {/* Mobile Code Modal */}
-            {showMobileCode && (
-                <div className="fixed inset-0 z-50 flex flex-col bg-cyber-bg">
-                    <div className="flex items-center justify-between p-4 border-b border-cyber-border/50 glass">
-                        <h2 className="text-lg font-semibold">Docker Compose YAML</h2>
-                        <div className="flex gap-2">
-                            <button onClick={handleExport} className="btn btn-primary text-sm py-1.5"><Download size={16} className="mr-1" />Export</button>
-                            <button onClick={() => setShowMobileCode(false)} className="text-cyber-accent font-medium">Done</button>
-                        </div>
-                    </div>
-                    <div className="flex-1 overflow-auto">
-                        <CodePreview />
-                    </div>
-                </div>
-            )}
-
-            {/* What's New Modal */}
-            <WhatsNewModal onAction={handleWhatsNewAction} />
-
-            {/* Template Modal */}
-            {showTemplates && <TemplateModal onSelect={handleAddFromTemplate} onClose={() => setShowTemplates(false)} />}
         </div>
     );
 }

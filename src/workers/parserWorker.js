@@ -18,6 +18,12 @@ const MESSAGE_TYPES = {
 self.onmessage = (event) => {
     const { type, payload, id } = event.data;
 
+    // Debug: log incoming parse requests
+    try {
+        // eslint-disable-next-line no-console
+        console.debug('[parserWorker] onmessage', type, id);
+    } catch (e) {}
+
     if (type === MESSAGE_TYPES.PARSE) {
         try {
             const { yamlString, options = {} } = payload;
@@ -31,12 +37,21 @@ self.onmessage = (event) => {
                 variables: Array.from(result.variables || [])
             };
 
+            try {
+                // eslint-disable-next-line no-console
+                console.debug('[parserWorker] PARSE_SUCCESS id=', id, 'vars=', serializedResult.variables && serializedResult.variables.length);
+            } catch (e) {}
+
             self.postMessage({
                 type: MESSAGE_TYPES.PARSE_SUCCESS,
                 payload: serializedResult,
                 id
             });
         } catch (error) {
+            try {
+                // eslint-disable-next-line no-console
+                console.debug('[parserWorker] PARSE_ERROR', error && error.message);
+            } catch (e) {}
             self.postMessage({
                 type: MESSAGE_TYPES.PARSE_ERROR,
                 payload: {
