@@ -390,6 +390,8 @@ export function ComposeProvider({ children }) {
         const key = `${yamlCode || ''}::${JSON.stringify(errors || [])}`;
 
         try {
+            // When embedded as a read-only graph, do not broadcast state (prevents feedback loops)
+            if (embedMode === 'graph') return;
             if (suppressBroadcastRef.current) return;
 
             // If identical to last broadcast, skip

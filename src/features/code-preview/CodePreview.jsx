@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Code, Download, Upload, CheckCircle, X, Eye, Copy, Folder } from 'lucide-react';
 import { IconButton } from '../../components/ui';
 import { useCompose } from '../../hooks/useCompose.jsx';
@@ -8,13 +8,16 @@ import { useCompose } from '../../hooks/useCompose.jsx';
  */
 export const CodePreview = () => {
     // Get compose state from context
-    const { yamlCode, handleExport, loadFiles } = useCompose();
+    const { yamlCode, handleExport, loadFiles, embedMode } = useCompose();
 
-    const [editMode, setEditMode] = useState(false);
+    // Start in edit mode automatically when embedded in `editor` mode
+    const [editMode, setEditMode] = useState(!!(embedMode === 'editor'));
     const [editValue, setEditValue] = useState('');
     const [copied, setCopied] = useState(false);
     const fileInputRef = useRef(null);
     const folderInputRef = useRef(null);
+    const autosaveTimeoutRef = useRef(null);
+    const lastSavedRef = useRef(yamlCode);
 
     const splitComment = (line) => {
         const hashIndex = line.indexOf('#');
@@ -97,7 +100,8 @@ export const CodePreview = () => {
         try {
             const result = await loadFiles(editValue);
             if (result.success) {
-                setEditMode(false);
+                // If we're embedded in editor mode, remain in edit mode; otherwise close edit mode
+                if (embedMode !== 'editor') setEditMode(false);
             } else {
                 alert('Invalid YAML: ' + (result.error || 'Unknown error'));
             }
@@ -130,6 +134,50 @@ export const CodePreview = () => {
             alert('Import failed: ' + error.message);
         }
     };
+
+    // Keep editValue in sync when entering edit mode or when yamlCode changes
+    useEffect(() => {
+        if (editMode) {
+            setEditValue(yamlCode);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editMode]);
+
+    // Force edit mode when embedded in editor mode (run only when embedMode changes)
+    useEffect(() => {
+        if (embedMode === 'editor') {
+            setEditMode(true);
+            setEditValue(yamlCode);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [embedMode]);
+
+    // Autosave: save 5s after last change
+    useEffect(() => {
+        // don't autosave when not editing
+        if (!editMode) return;
+
+        if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = setTimeout(async () => {
+            try {
+                // Only save if content changed since last save
+                if (lastSavedRef.current === editValue) return;
+                const result = await loadFiles(editValue);
+                if (result && result.success) {
+                    lastSavedRef.current = editValue;
+                }
+            } catch (err) {
+                console.error('Autosave failed:', err);
+            }
+        }, 2000);
+
+        return () => {
+            if (autosaveTimeoutRef.current) {
+                clearTimeout(autosaveTimeoutRef.current);
+                autosaveTimeoutRef.current = null;
+            }
+        };
+    }, [editMode, editValue, loadFiles]);
 
     return (
         <div className="h-full flex flex-col">
