@@ -45,7 +45,7 @@
       <iframe id="graph" src="" title="CompoViz Graph"></iframe>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="brokerPanel">
       <h3 style="margin:0 0 8px 0">Broker log</h3>
       <div class="log" id="log"></div>
 
@@ -74,6 +74,12 @@
       // Assumes CompoViz is served at the same origin root
       editor.src = `${origin}/?mode=editor&session=test-session`;
       graph.src = `${origin}/?mode=graph&session=test-session`;
+
+      // Respect debug flag to optionally show broker panel
+      const qs = location.search || '';
+      const showDebug = qs.includes('debug');
+      const brokerPanel = document.getElementById('brokerPanel');
+      if (!showDebug && brokerPanel) brokerPanel.style.display = 'none';
 
       function log(msg){
         const row = document.createElement('div');

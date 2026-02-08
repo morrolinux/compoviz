@@ -41,12 +41,21 @@
   <!-- Ko-fi Donation Widget -->
   <script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
   <script>
-    kofiWidgetOverlay.draw('compoviz', {
-      'type': 'floating-chat',
-      'floating-chat.donateButton.text': 'Donate',
-      'floating-chat.donateButton.background-color': '#ffffff',
-      'floating-chat.donateButton.text-color': '#323842'
-    });
+    // Only show Ko-fi donate widget when not embedded via ?mode= or ?embed_token=
+    try {
+      const qs = window.location.search || '';
+      const isEmbedded = qs.includes('mode=') || qs.includes('embed_token=');
+      if (!isEmbedded && window.kofiWidgetOverlay && typeof kofiWidgetOverlay.draw === 'function') {
+        kofiWidgetOverlay.draw('compoviz', {
+          'type': 'floating-chat',
+          'floating-chat.donateButton.text': 'Donate',
+          'floating-chat.donateButton.background-color': '#ffffff',
+          'floating-chat.donateButton.text-color': '#323842'
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
   </script>
 </body>
 

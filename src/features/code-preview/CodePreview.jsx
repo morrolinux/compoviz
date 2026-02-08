@@ -180,7 +180,7 @@ export const CodePreview = () => {
             } catch (err) {
                 console.error('Autosave failed:', err);
             }
-        }, 2000);
+        }, 1000);
 
         return () => {
             if (autosaveTimeoutRef.current) {
@@ -200,7 +200,7 @@ export const CodePreview = () => {
                     {editMode ? (
                         <>
                             <button onClick={handleSave} className="btn btn-primary text-xs py-1">
-                                <CheckCircle size={14} className="mr-1" />Save
+                                <CheckCircle size={14} className="mr-1" />Aggiorna il grafo
                             </button>
                             <button onClick={() => setEditMode(false)} className="btn btn-secondary text-xs py-1">
                                 <X size={14} className="mr-1" />Cancel

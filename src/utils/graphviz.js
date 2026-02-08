@@ -98,7 +98,11 @@ const classifyServiceTier = (name, svc) => {
     if (ports.length > 0) {
         const hasCommonPorts = ports.some(portRaw => {
             const p = getValue(portRaw);
-            const portStr = typeof p === 'string' ? p : String(p.published);
+            if (!p) return false;
+            const portStr = typeof p === 'string'
+                ? p
+                : (p.published !== undefined && p.published !== null ? String(p.published) : (p.target !== undefined && p.target !== null ? String(p.target) : ''));
+            if (!portStr) return false;
             return ['80', '443', '8080', '8443', '4443'].includes(portStr.split(':')[0]);
         });
         if (hasCommonPorts) return 'routing'; // Assumption: Web ports usually imply routing/web
@@ -191,8 +195,16 @@ export const generateGraphviz = (state) => {
                     protocol = portProtocolMatch ? portProtocolMatch[1].toLowerCase() : 'tcp';
                 }
             } else {
-                hostPort = port.published;
-                protocol = port.protocol || 'tcp';
+                // port may be an object; ensure it has published or target
+                if (port && (port.published !== undefined && port.published !== null)) {
+                    hostPort = port.published;
+                } else if (port && (port.target !== undefined && port.target !== null)) {
+                    hostPort = port.target;
+                } else {
+                    // malformed port entry, skip this port
+                    return;
+                }
+                protocol = (port && port.protocol) || 'tcp';
             }
             allPorts.push({
                 id: `port_${sanitizeId(name)}_${idx}`,
@@ -582,8 +594,8 @@ export const generateMultiProjectGraphviz = (projects, conflicts = []) => {
                 .map((port) => {
                     if (typeof port === 'string') return port;
                     if (port && typeof port === 'object') {
-                        const published = port.published || port.target;
-                        const target = port.target || port.published;
+                        const published = (port.published !== undefined && port.published !== null) ? port.published : port.target;
+                        const target = (port.target !== undefined && port.target !== null) ? port.target : port.published;
                         if (!published || !target) return '';
                         return `${published}:${target}`;
                     }
