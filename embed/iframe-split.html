@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CompoViz iframe splitview test</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:#0b1020;color:#e6eef8}
+    .toolbar{padding:12px;display:flex;gap:8px;align-items:center;background:#061024}
+    .container{display:flex;height:calc(100% - 56px)}
+    iframe{flex:1;border:0;height:100%}
+    .panel{width:360px;max-width:40%;background:#071425;padding:12px;box-sizing:border-box;overflow:auto}
+    .log{height:200px;overflow:auto;background:#02121b;padding:8px;border-radius:6px;font-size:12px}
+    input,button,select,textarea{font-size:13px}
+    .btn{background:#0e5cb6;color:#fff;padding:6px 10px;border:0;border-radius:6px;cursor:pointer}
+    .muted{color:#9fb3c8}
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <strong>CompoViz Splitview Test</strong>
+    <span class="muted">&nbsp;— broker / iframe communication</span>
+    <div style="flex:1"></div>
+    <label class="muted">Embed token</label>
+    <input id="token" placeholder="(optional) token" style="margin-left:8px;padding:6px;border-radius:6px;border:1px solid #15334a;background:#081622;color:#dbeefc" />
+  </div>
+
+  <div style="display:flex;gap:8px;height:calc(100% - 56px)">
+    <div style="flex:1;display:flex;flex-direction:column">
+      <div style="padding:8px;background:#071e2c;display:flex;gap:8px;align-items:center">
+        <button id="sendYaml" class="btn">Send sample YAML → editor</button>
+        <button id="reqExport" class="btn">Request export (editor)</button>
+        <button id="clearLog" class="btn" style="background:#666">Clear log</button>
+        <label style="margin-left:8px;color:#9fb3c8">Editor</label>
+      </div>
+      <iframe id="editor" src="" title="CompoViz Editor"></iframe>
+    </div>
+
+    <div style="width:4px;background:#0b2230"></div>
+
+    <div style="flex:1;display:flex;flex-direction:column">
+      <div style="padding:8px;background:#071e2c;display:flex;gap:8px;align-items:center">
+        <label style="color:#9fb3c8">Graph</label>
+      </div>
+      <iframe id="graph" src="" title="CompoViz Graph"></iframe>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px 0">Broker log</h3>
+      <div class="log" id="log"></div>
+
+      <h4 style="margin-top:12px">Last received state (from CV_STATE_UPDATE)</h4>
+      <pre id="lastState" style="background:#02121b;padding:8px;border-radius:6px;max-height:220px;overflow:auto;color:#cfeefc;font-size:12px"></pre>
+
+      <h4 style="margin-top:12px">Notes</h4>
+      <ul class="muted">
+        <li>This page embeds two CompoViz instances from the same origin.</li>
+        <li>It forwards any postMessage it receives to both iframes (origin must match).</li>
+        <li>Use <code>?mode=editor</code> and <code>?mode=graph</code> query params when testing.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const origin = location.origin;
+      const editor = document.getElementById('editor');
+      const graph = document.getElementById('graph');
+      const logEl = document.getElementById('log');
+      const lastStateEl = document.getElementById('lastState');
+      const tokenInput = document.getElementById('token');
+
+      // Set iframe sources relative to current origin
+      // Assumes CompoViz is served at the same origin root
+      editor.src = `${origin}/?mode=editor&session=test-session`;
+      graph.src = `${origin}/?mode=graph&session=test-session`;
+
+      function log(msg){
+        const row = document.createElement('div');
+        row.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(row);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // Forward messages between iframes, and show state updates
+      window.addEventListener('message', (e) => {
+        try{
+          // Only accept messages from same origin (adjust if remote)
+          if (e.origin !== origin) {
+            log(`Ignored message from origin ${e.origin}`);
+            return;
+          }
+
+          const data = e.data || {};
+          log(`Received from iframe: ${JSON.stringify(data)}`);
+
+          if (data.type === 'CV_STATE_UPDATE'){
+            lastStateEl.textContent = JSON.stringify(data.payload || {}, null, 2);
+          }
+
+          // Forward to both frames (except the source)
+          const target = (e.source === editor.contentWindow) ? graph.contentWindow : editor.contentWindow;
+          // attach token from broker if provided and not present
+          const token = tokenInput.value && tokenInput.value.trim() ? tokenInput.value.trim() : null;
+          const out = Object.assign({}, data);
+          if (token && !out.token) out.token = token;
+
+          try{ target.postMessage(out, origin); log(`Forwarded ${JSON.stringify(out)}`); }catch(err){ log('Forward error: '+err.message); }
+
+        }catch(err){
+          log('Malformed message');
+        }
+      }, false);
+
+      // UI actions
+      document.getElementById('sendYaml').addEventListener('click', () => {
+        const sample = `version: '3.8'\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n`;
+        const msg = { type: 'CV_LOAD_YAML', payload: { yaml: sample } };
+        const token = tokenInput.value && tokenInput.value.trim() ? tokenInput.value.trim() : null;
+        if (token) msg.token = token;
+        editor.contentWindow.postMessage(msg, origin);
+        log('Sent CV_LOAD_YAML to editor');
+      });
+
+      document.getElementById('reqExport').addEventListener('click', () => {
+        const msg = { type: 'CV_EXPORT_YAML' };
+        const token = tokenInput.value && tokenInput.value.trim() ? tokenInput.value.trim() : null;
+        if (token) msg.token = token;
+        editor.contentWindow.postMessage(msg, origin);
+        log('Sent CV_EXPORT_YAML to editor');
+      });
+
+      document.getElementById('clearLog').addEventListener('click', () => { logEl.innerHTML = ''; lastStateEl.textContent = ''; });
+
+      log('Broker ready — listening for iframe messages');
+    })();
+  </script>
+</body>
+</html>
